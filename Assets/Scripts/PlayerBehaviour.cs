@@ -13,7 +13,6 @@ public class PlayerBehaviour : MonoBehaviour
     // La gravité doit être augmentée quand on est sur une pente, en l’occurence on se déplace de pull strength sur Y
     [SerializeField] private float pullStrength;
     [SerializeField] private int jumpForce;
-    [SerializeField] private LayerMask groundMask;
 
     private Controls controls;
 
@@ -27,6 +26,8 @@ public class PlayerBehaviour : MonoBehaviour
     private Camera mainCam;
     private Animator animator;
 
+    private Vector3 positionDelta;
+
     private void OnEnable()
     {
         controls = new Controls();
@@ -34,6 +35,7 @@ public class PlayerBehaviour : MonoBehaviour
         controls.Main.Move.performed += OnMovePerformed;
         controls.Main.Move.canceled += OnMoveCanceled;
         controls.Main.Jump.performed += OnJumpPerformed;
+        controls.Main.Jump.canceled += OnJumpCanceled;
         controls.Main.Aim.performed += OnAimPerformed;
         controls.Main.Aim.canceled += OnAimCanceled;
     }
@@ -57,13 +59,12 @@ public class PlayerBehaviour : MonoBehaviour
 
     private void OnJumpPerformed(InputAction.CallbackContext obj)
     {
-        isJumpPressed = true;
-        StartCoroutine(DisableJump());
+        if (controller.isGrounded)
+            isJumpPressed = true;
     }
 
-    private IEnumerator DisableJump()
+    private void OnJumpCanceled(InputAction.CallbackContext obj)
     {
-        yield return null;
         isJumpPressed = false;
     }
 
@@ -83,6 +84,7 @@ public class PlayerBehaviour : MonoBehaviour
     // Update is called once per frame
     private void Update()
     {
+        var oldPosition = transform.position;
         var moveDir = Vector3.zero;
         /*
         D’après Pythagore, la magnitude d’un vecteur se calcule de la manière suivante :
@@ -100,9 +102,11 @@ public class PlayerBehaviour : MonoBehaviour
 
         moveDir += GetGravity();
         moveDir += GetJumpForce();
+        wasGroundedLastFrame = controller.isGrounded;
         controller.Move(moveDir * Time.deltaTime);
         animator.SetFloat("ForwardSpeed", moveInputDirection.y);
         animator.SetFloat("LateralSpeed", moveInputDirection.x);
+        positionDelta = transform.position - oldPosition;
     }
 
     /// <summary>
@@ -139,9 +143,9 @@ public class PlayerBehaviour : MonoBehaviour
 
     private Vector3 GetGravity()
     {
-        if (controller.isGrounded)
+        if (controller.isGrounded && !isJumpPressed)
             return new Vector3(0, -pullStrength, 0);
-        if (wasGroundedLastFrame)
+        if (wasGroundedLastFrame && controller.velocity.y < 0)
             return Vector3.zero;
         return new Vector3(0, controller.velocity.y, 0) + Physics.gravity * Time.deltaTime;
     }
@@ -158,14 +162,5 @@ public class PlayerBehaviour : MonoBehaviour
         }
 
         return Vector3.zero;
-    }
-
-    /// <summary>
-    /// Late Update est appelée à la fin de la frame et permet d’enregistrer des informations après que tous les
-    /// déplacements soit terminés.
-    /// </summary>
-    private void LateUpdate()
-    {
-        wasGroundedLastFrame = controller.isGrounded;
     }
 }
